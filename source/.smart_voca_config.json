@@ -1,0 +1,15 @@
+{
+    "remembered_email": "voca.user65@gmail.com",
+    "env_var_name": "",
+    "app_mode": "personal",
+    "supabase_url": "https://vtuvhssfdyhqmzyvjuwm.supabase.co",
+    "supabase_key": "sb_publishable_FrdPHSnBfFy3w3j3xIYpRA_gizJzVSo",
+    "detail_sort_index": 1,
+    "mysets_sort_index": 2,
+    "shortcuts": {
+        "tts": 84,
+        "star": 83
+    },
+    "model_name": "",
+    "prompt_filepath": "gemini_prompt.txt"
+}

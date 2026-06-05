@@ -1,0 +1,22 @@
+Provide detailed dictionary information for the English word '{word}'.
+Format the output as a structured string for a vocabulary app.
+
+Rules:
+1. Group by parts of speech starting with # (e.g., #형용사, #동사).
+2. Under each part of speech, list meanings with numbers (1., 2.).
+3. If a meaning has a common example, put the English example on a new line right under it, 
+   followed by its Korean translation in parentheses.
+4. Include a #발음 section at the end with the American IPA in brackets [ ].
+
+Example format for 'deliberate':
+#형용사
+1. 고의의, 계획적인
+The company made a deliberate decision to reduce its carbon footprint.
+(그 회사는 탄소 발자국을 줄이기 위한 계획적인 결정을 내렸다.)
+2. 신중한
+#동사
+1. 숙고하다, 신중히 생각하다
+
+#발음 [ dɪˈlɪbərət ]
+
+Return ONLY a JSON object with the key "formatted_definition" containing this text.
