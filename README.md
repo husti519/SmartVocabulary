@@ -14,7 +14,7 @@
 Smart Vocabulary는 현대적인 데스크탑 환경에서 AI 기술과 클라우드 동기화를 결합하여 사용자의 효율적인 외국어 학습을 돕는 스마트 영단어 암기장 애플리케이션입니다. 미리 구축된 supabase DB 또는 자신만의 supabase DB를 구축하여 회원가입 후 사용할 수 있습니다.  
 
 실행 파일 다운로드 : Github의 Release 탭 또는 아래 링크(OneDrive)에서 바로 다운로드  
-https://1drv.ms/u/c/6f9015af5fd64464/IQCUX7pgMgGlR7fi016vz-ewAR1l5r04DvdBH-0T28Be_KY?e=jsDjLO  
+<a href="https://1drv.ms/u/c/6f9015af5fd64464/IQCUX7pgMgGlR7fi016vz-ewAR1l5r04DvdBH-0T28Be_KY?e=jsDjLO" target="_blank" rel="noopener noreferrer">우클릭을 눌러 새 창에서 다운로드하실 수 있습니다.</a>
 
 <img src="readme_image/Home.png" width="400" height="300" style="margin-left: 25px;" alt="Home 화면">  
 
