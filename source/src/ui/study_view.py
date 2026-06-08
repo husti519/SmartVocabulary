@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QPushButton, QFrame, QScrollArea, QGraphicsDropShadowEffect, QGridLayout, QSizePolicy)
+                             QPushButton, QFrame, QScrollArea, QGraphicsDropShadowEffect, QGridLayout, QSizePolicy, QMessageBox)
 from PySide6.QtCore import Qt, Signal, QSize, QTimer, QEvent
 from PySide6.QtGui import QColor
 from ..backend.supabase_client import SupabaseManager
@@ -360,24 +360,28 @@ class StudyView(QWidget):
         
         bottom_bar_layout.addWidget(self.starred_filter_container, 0, 0, Qt.AlignLeft)
         
-        # Center: Vertical Shortcut Hints
-        self.hint_container = QWidget()
-        hint_layout = QVBoxLayout(self.hint_container)
-        hint_layout.setContentsMargins(0, 0, 0, 0)
-        hint_layout.setSpacing(2)
-        hint_layout.setAlignment(Qt.AlignCenter)
-        
-        self.tts_hint = QLabel("Press 'T' to listen")
-        self.tts_hint.setStyleSheet("font-size: 12px; color: #95a5a6; font-style: italic; font-weight: bold;")
-        self.tts_hint.setAlignment(Qt.AlignCenter)
-        hint_layout.addWidget(self.tts_hint)
-
-        self.star_hint = QLabel("Press 'S' to star")
-        self.star_hint.setStyleSheet("font-size: 12px; color: #95a5a6; font-style: italic; font-weight: bold;")
-        self.star_hint.setAlignment(Qt.AlignCenter)
-        hint_layout.addWidget(self.star_hint)
-        
-        bottom_bar_layout.addWidget(self.hint_container, 0, 1, Qt.AlignCenter)
+        # Center: Shortcut Info Button
+        self.btn_info = QPushButton("⌨️ Shortcut Guide")
+        self.btn_info.setCursor(Qt.PointingHandCursor)
+        self.btn_info.setFocusPolicy(Qt.NoFocus)
+        self.btn_info.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #7f8c8d;
+                font-size: 13px;
+                font-weight: 600;
+                border: 1px solid #ced4da;
+                border-radius: 15px;
+                padding: 5px 15px;
+            }
+            QPushButton:hover {
+                background-color: #f8f9fa;
+                color: #2c3e50;
+                border-color: #adb5bd;
+            }
+        """)
+        self.btn_info.clicked.connect(self.show_shortcut_guide)
+        bottom_bar_layout.addWidget(self.btn_info, 0, 1, Qt.AlignCenter)
 
         # Right Side: Shuffle Button
         shuffle_icon = AssetManager.get_icon("icons8-shuffle-48.png")
@@ -550,11 +554,36 @@ class StudyView(QWidget):
 
         # Update shortcut hints dynamically
         shortcuts = ConfigManager.get_shortcuts()
-        star_key = shortcuts.get('star', 16777237)
-        tts_key = shortcuts.get('tts', 16777235)
+        prev_key = shortcuts.get('prev', Qt.Key_Left)
+        next_key = shortcuts.get('next', Qt.Key_Right)
+        flip_key = shortcuts.get('flip', Qt.Key_Space)
+        self.btn_prev.setText(f"← Previous ({ConfigManager.key_to_string(prev_key)})" if prev_key != 0 else "← Previous")
+        self.btn_flip.setText(f"Flip ({ConfigManager.key_to_string(flip_key)})" if flip_key != 0 else "Flip")
+        self.btn_next.setText(f"({ConfigManager.key_to_string(next_key)}) Next →" if next_key != 0 else "Next →")
 
-        self.star_hint.setText(f"Press '{ConfigManager.key_to_string(star_key)}' to star" if star_key != 0 else ' ')
-        self.tts_hint.setText(f"Press '{ConfigManager.key_to_string(tts_key)}' to listen" if tts_key != 0 else ' ')
+    def show_shortcut_guide(self):
+        shortcuts = ConfigManager.get_shortcuts()
+
+        guide_text = "<div style='line-height: 1.6; text-align: left;'>"
+        guide_text += "<b style='font-size: 16px;'>⌨️ Keyboard Shortcuts Guide</b><br><br>"
+        guide_text += f"• <b>TTS (Listen):</b> {ConfigManager.key_to_string(shortcuts.get('tts', 0))}<br>"
+        guide_text += f"• <b>Star (Toggle):</b> {ConfigManager.key_to_string(shortcuts.get('star', 0))}<br>"
+        guide_text += f"• <b>Previous Card:</b> {ConfigManager.key_to_string(shortcuts.get('prev', 0))}<br>"
+        guide_text += f"• <b>Next Card:</b> {ConfigManager.key_to_string(shortcuts.get('next', 0))}<br>"
+        guide_text += f"• <b>Flip Card:</b> {ConfigManager.key_to_string(shortcuts.get('flip', 0))}"
+        guide_text += "</div>"
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Shortcut Guide")
+        msg.setText(guide_text)
+        msg.setStyleSheet("""
+            QMessageBox { 
+                background-color: #F7F8FA;
+                min-width: 240px;
+                font-size: 14px;
+            }
+        """)
+        msg.exec()
 
     def jump_to_card(self):
         """Jumps to a specific card index entered by the user."""
@@ -610,26 +639,29 @@ class StudyView(QWidget):
     def keyPressEvent(self, event):
         key = event.key()
 
-        tts_key = self.shortcuts.get('tts', 16777235) # Default Up
-        star_key = self.shortcuts.get('star', 16777237) # Default Down
+        tts_key = self.shortcuts.get('tts', Qt.Key_Up)
+        star_key = self.shortcuts.get('star', Qt.Key_Down)
+        prev_key = self.shortcuts.get('prev', Qt.Key_Left)
+        next_key = self.shortcuts.get('next', Qt.Key_Right)
+        flip_key = self.shortcuts.get('flip', Qt.Key_Space)
 
         if key == tts_key:
             self.play_current_tts()
         elif key == star_key:
             self.card_widget.toggle_star()
-        elif key == Qt.Key_Space:
+        elif key == flip_key:
             self.btn_flip.animateClick()
-        elif key == Qt.Key_Right:
+        elif key == next_key:
             if self.btn_next.isEnabled(): self.btn_next.animateClick()
-        elif key == Qt.Key_Left:
+        elif key == prev_key:
             if self.btn_prev.isEnabled(): self.btn_prev.animateClick()
         elif key == Qt.Key_Up:
             # If Up is used as a custom shortcut, it won't scroll here
-            if tts_key != Qt.Key_Up and star_key != Qt.Key_Up:
+            if tts_key != Qt.Key_Up and star_key != Qt.Key_Up and prev_key != Qt.Key_Up and next_key != Qt.Key_Up and flip_key != Qt.Key_Up:
                 self.card_widget.scroll_up()
         elif key == Qt.Key_Down:
             # If Down is used as a custom shortcut, it won't scroll here
-            if tts_key != Qt.Key_Down and star_key != Qt.Key_Down:
+            if tts_key != Qt.Key_Down and star_key != Qt.Key_Down and prev_key != Qt.Key_Down and next_key != Qt.Key_Down and flip_key != Qt.Key_Down:
                 self.card_widget.scroll_down()
         else:
             super().keyPressEvent(event)

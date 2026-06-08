@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFileDialog,
                              QLineEdit, QPushButton, QFrame, QMessageBox, QComboBox, 
-                             QRadioButton, QButtonGroup, QTextEdit, QScrollArea)
+                             QRadioButton, QButtonGroup, QTextEdit, QScrollArea, QGridLayout)
 from PySide6.QtCore import Qt, Signal, QTimer
 import os
 import re
@@ -335,8 +335,38 @@ class SettingsView(QWidget):
         shortcut_desc.setStyleSheet("color: #7f8c8d; font-size: 14px; font-weight: 500;")
         shortcut_group_layout.addWidget(shortcut_desc)
 
-        shortcut_inputs = QHBoxLayout()
-        shortcut_inputs.setSpacing(30)
+        self.shortcut_group_widget = QWidget()
+        self.shortcut_group_widget.setStyleSheet("QWidget { background-color: transparent; }")
+        self.shortcut_group_widget.setFixedWidth(700)
+        shortcut_input_grid = QGridLayout(self.shortcut_group_widget)
+        shortcut_input_grid.setSpacing(20)
+
+        # Prev Shortcut
+        prev_hbox = QHBoxLayout()
+        prev_hbox.addWidget(QLabel("이전 카드 (Prev):"))
+        self.shortcut_prev_input = ShortcutLineEdit()
+        self.shortcut_prev_input.setFixedWidth(80)
+        self.shortcut_prev_input.setStyleSheet(input_style)
+        prev_hbox.addWidget(self.shortcut_prev_input)
+        shortcut_input_grid.addLayout(prev_hbox, 0, 0)
+
+        # Next Shortcut
+        next_hbox = QHBoxLayout()
+        next_hbox.addWidget(QLabel("다음 카드 (Next):"))
+        self.shortcut_next_input = ShortcutLineEdit()
+        self.shortcut_next_input.setFixedWidth(80)
+        self.shortcut_next_input.setStyleSheet(input_style)
+        next_hbox.addWidget(self.shortcut_next_input)
+        shortcut_input_grid.addLayout(next_hbox, 0, 1)
+
+        # Flip Shortcut
+        flip_hbox = QHBoxLayout()
+        flip_hbox.addWidget(QLabel("카드 뒤집기 (Flip):"))
+        self.shortcut_flip_input = ShortcutLineEdit()
+        self.shortcut_flip_input.setFixedWidth(80)
+        self.shortcut_flip_input.setStyleSheet(input_style)
+        flip_hbox.addWidget(self.shortcut_flip_input)
+        shortcut_input_grid.addLayout(flip_hbox, 0, 2)
 
         # TTS Shortcut
         tts_hbox = QHBoxLayout()
@@ -345,7 +375,7 @@ class SettingsView(QWidget):
         self.shortcut_tts_input.setFixedWidth(80)
         self.shortcut_tts_input.setStyleSheet(input_style)
         tts_hbox.addWidget(self.shortcut_tts_input)
-        shortcut_inputs.addLayout(tts_hbox)
+        shortcut_input_grid.addLayout(tts_hbox, 1, 0)
 
         # Star Shortcut
         star_hbox = QHBoxLayout()
@@ -354,11 +384,10 @@ class SettingsView(QWidget):
         self.shortcut_star_input.setFixedWidth(80)
         self.shortcut_star_input.setStyleSheet(input_style)
         star_hbox.addWidget(self.shortcut_star_input)
-        shortcut_inputs.addLayout(star_hbox)
+        shortcut_input_grid.addLayout(star_hbox, 1, 1)
 
-        shortcut_inputs.addStretch()
-        shortcut_group_layout.addLayout(shortcut_inputs)
-
+        #shortcut_group_layout.addLayout(shortcut_input_grid)
+        shortcut_group_layout.addWidget(self.shortcut_group_widget)
         self.layout.addWidget(self.shortcut_group_frame)
 
         # SECTION 4: Account Management
@@ -473,9 +502,19 @@ class SettingsView(QWidget):
                 ConfigManager.save_model_name(model_name, persist=False, sync=False)
 
         # Save Shortcuts
-        tts_key = self.shortcut_tts_input.key_code or 84 # Default T
-        star_key = self.shortcut_star_input.key_code or 83 # Default S
-        ConfigManager.save_shortcuts({'tts': tts_key, 'star': star_key}, sync=False)
+        tts_key = self.shortcut_tts_input.key_code
+        star_key = self.shortcut_star_input.key_code
+        prev_key = self.shortcut_prev_input.key_code
+        next_key = self.shortcut_next_input.key_code
+        flip_key = self.shortcut_flip_input.key_code
+        
+        ConfigManager.save_shortcuts({
+            'tts': tts_key, 
+            'star': star_key,
+            'prev': prev_key,
+            'next': next_key,
+            'flip': flip_key
+        }, sync=False)
 
         # Sync all changes to disk
         ConfigManager.sync()
@@ -611,13 +650,25 @@ class SettingsView(QWidget):
         # Load shortcuts
         shortcuts = ConfigManager.get_shortcuts()
         
-        tts_key = shortcuts.get('tts', 84)
+        tts_key = shortcuts.get('tts', Qt.Key_Up)
         self.shortcut_tts_input.key_code = tts_key
         self.shortcut_tts_input.setText(ConfigManager.key_to_string(tts_key))
         
-        star_key = shortcuts.get('star', 83)
+        star_key = shortcuts.get('star', Qt.Key_Down)
         self.shortcut_star_input.key_code = star_key
         self.shortcut_star_input.setText(ConfigManager.key_to_string(star_key))
+
+        prev_key = shortcuts.get('prev', Qt.Key_Left)
+        self.shortcut_prev_input.key_code = prev_key
+        self.shortcut_prev_input.setText(ConfigManager.key_to_string(prev_key))
+
+        next_key = shortcuts.get('next', Qt.Key_Right)
+        self.shortcut_next_input.key_code = next_key
+        self.shortcut_next_input.setText(ConfigManager.key_to_string(next_key))
+
+        flip_key = shortcuts.get('flip', Qt.Key_Space)
+        self.shortcut_flip_input.key_code = flip_key
+        self.shortcut_flip_input.setText(ConfigManager.key_to_string(flip_key))
 
         self.update_view_visibility()
 

@@ -112,15 +112,17 @@ class CardInputRow(QFrame):
         self.num_label.setFixedWidth(30)
         self.num_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.num_label.setContentsMargins(0, 5, 0, 0)
-        self.main_row_layout.addWidget(self.num_label)
+        self.main_row_layout.addWidget(self.num_label, 0, Qt.AlignTop)
 
         # TERM (Word)
         word_vbox = QVBoxLayout()
+        word_vbox.setContentsMargins(0, 5, 0, 0)
         word_vbox.setSpacing(5)
-        word_vbox.setAlignment(Qt.AlignTop)
+        word_vbox.setAlignment(Qt.AlignCenter)
         word_hdr = QLabel("TERM")
         word_hdr.setObjectName("header_label")
         word_vbox.addWidget(word_hdr)
+        word_vbox.addStretch()
         
         self.word_input = SmartTextEdit()
         self.word_input.setPlaceholderText("Enter term")
@@ -136,19 +138,23 @@ class CardInputRow(QFrame):
         """)
         word_vbox.addWidget(self.btn_autofill, 0, Qt.AlignLeft)
         self.main_row_layout.addLayout(word_vbox, 2)
+        self.main_row_layout.setAlignment(word_vbox, Qt.AlignTop)
 
         # DEFINITION
         def_vbox = QVBoxLayout()
+        def_vbox.setContentsMargins(0, 5, 0, 0)
         def_vbox.setSpacing(5)
         def_vbox.setAlignment(Qt.AlignTop)
         def_hdr = QLabel("DEFINITION")
         def_hdr.setObjectName("header_label")
         def_vbox.addWidget(def_hdr)
+        def_vbox.addStretch()
         
         self.def_input = SmartTextEdit()
         self.def_input.setPlaceholderText("Enter definition")
         def_vbox.addWidget(self.def_input)
         self.main_row_layout.addLayout(def_vbox, 3)
+        self.main_row_layout.setAlignment(def_vbox, Qt.AlignTop)
 
         # DELETE
         self.btn_delete = QPushButton("🗑️")

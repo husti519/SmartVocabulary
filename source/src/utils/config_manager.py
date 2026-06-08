@@ -167,7 +167,14 @@ class ConfigManager(QObject):
     @staticmethod
     def get_shortcuts():
         ConfigManager._ensure_loaded()
-        return ConfigManager._config_cache.get('shortcuts', {'tts': 16777235, 'star': 16777237})
+        defaults = {
+            'tts': Qt.Key_Up,
+            'star': Qt.Key_Down,
+            'prev': Qt.Key_Left,
+            'next': Qt.Key_Right,
+            'flip': Qt.Key_Space
+        }
+        return ConfigManager._config_cache.get('shortcuts', defaults)
 
     @staticmethod
     def delete_api_key():

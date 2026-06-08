@@ -8,7 +8,10 @@
     "mysets_sort_index": 2,
     "shortcuts": {
         "tts": 84,
-        "star": 83
+        "star": 83,
+        "prev": 16777234,
+        "next": 16777236,
+        "flip": 16777237
     },
     "model_name": "",
     "prompt_filepath": "gemini_prompt.txt"
