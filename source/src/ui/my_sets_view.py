@@ -1422,4 +1422,6 @@ class MySetsView(QWidget):
         self.exit_selection_mode()
         self.detail_view.exit_selection_mode()
         self.stacked_widget.setCurrentIndex(0)
-        self.search_input.clear()
+        self.all_sets_data = []
+        self.clear_search()
+        self.clear_word_results()
