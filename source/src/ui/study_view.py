@@ -14,8 +14,8 @@ class CardWidget(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(600, 400)
-        self.setMaximumSize(1000, 600)
+        self.setMinimumSize(600, 450)
+        self.setMaximumSize(1000, 680)
         self.setObjectName("MainCard")
         
         # Add Drop Shadow
@@ -418,10 +418,7 @@ class StudyView(QWidget):
         bottom_bar_layout.setColumnStretch(2, 1)
 
         self.main_v_layout.addWidget(self.bottom_bar_container, alignment=Qt.AlignCenter)
-
-        self.main_v_layout.addStretch(1)
-
-        self.main_v_layout.addSpacing(30)
+        self.main_v_layout.addSpacing(10)
 
         # Controls
         controls_layout = QHBoxLayout()

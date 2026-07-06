@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox, 
-                             QPushButton, QFrame, QLineEdit, QScrollArea, QTextEdit, QSizePolicy, QApplication)
-from PySide6.QtCore import Qt, Signal, QTimer, QThread
+                             QPushButton, QFrame, QLineEdit, QScrollArea, QTextEdit, QSizePolicy, QCheckBox)
+from PySide6.QtCore import Qt, Signal, QTimer, QThread, QPropertyAnimation, QEasingCurve, QEvent
+from PySide6.QtGui import QKeySequence, QShortcut, QTextCursor
 from ..backend.supabase_client import SupabaseManager
 from ..backend.crawler import GeminiWorker
 from ..utils.logger import log_exception
@@ -228,6 +229,10 @@ class CreateSetView(QWidget):
         self.rows = []
         self.edit_set_id = None
         self.is_autofilling = False
+        self.search_matches = []
+        self.current_search_index = -1
+        self.is_search_visible = False
+        self.current_search_field = None
         self.setup_ui()
 
     def setup_ui(self):
@@ -277,6 +282,7 @@ class CreateSetView(QWidget):
         self.desc_input.setPlaceholderText("Add a description...")
         self.desc_input.setStyleSheet("QLineEdit { border: none; border-bottom: 2px solid #E6E8EB; background-color: transparent; padding: 8px 0px; font-size: 15px; color: #586380; }")
         info_layout.addWidget(self.desc_input)
+        self.setup_search_bar(info_layout)
         self.main_layout.addLayout(info_layout)
 
         self.scroll_area = QScrollArea()
@@ -308,6 +314,214 @@ class CreateSetView(QWidget):
         self.main_layout.addLayout(buttons_layout)
 
         for _ in range(3): self.add_row()
+        self.setup_shortcuts()
+
+    def setup_shortcuts(self):
+        self.search_shortcut = QShortcut(QKeySequence.Find, self)
+        self.search_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self.search_shortcut.activated.connect(self.show_search_bar)
+
+    def setup_search_bar(self, parent_layout):
+        self.search_bar = QFrame()
+        self.search_bar.setObjectName("CreateSetSearchBar")
+        self.search_bar.setMaximumHeight(0)
+        self.search_bar.hide()
+        self.search_bar.setStyleSheet("""
+            QFrame#CreateSetSearchBar {
+                background-color: white;
+                border: 1px solid #E6E8EB;
+                border-radius: 8px;
+            }
+            QLineEdit {
+                padding: 8px 10px;
+                border: 1px solid #ced4da;
+                border-radius: 6px;
+                background-color: white;
+                color: #2c3e50;
+                font-size: 14px;
+            }
+            QPushButton {
+                background-color: white;
+                border: 1px solid #ced4da;
+                border-radius: 6px;
+                color: #2c3e50;
+                font-weight: bold;
+                padding: 7px 10px;
+            }
+            QPushButton:hover {
+                border-color: #3498db;
+                color: #3498db;
+            }
+            QCheckBox {
+                color: #586380;
+                background: transparent;
+                border: none;
+                font-size: 13px;
+                font-weight: 600;
+                spacing: 5px;
+            }
+        """)
+
+        search_layout = QHBoxLayout(self.search_bar)
+        search_layout.setContentsMargins(12, 8, 12, 8)
+        search_layout.setSpacing(8)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search terms and definitions...")
+        self.search_input.textChanged.connect(self.update_search_matches)
+        self.search_input.returnPressed.connect(self.goto_next_search_match)
+        search_layout.addWidget(self.search_input, 1)
+
+        self.chk_whole_word = QCheckBox("Whole word")
+        self.chk_whole_word.toggled.connect(lambda: self.update_search_matches(self.search_input.text()))
+        search_layout.addWidget(self.chk_whole_word)
+
+        self.chk_case_sensitive = QCheckBox("Case sensitive")
+        self.chk_case_sensitive.toggled.connect(lambda: self.update_search_matches(self.search_input.text()))
+        search_layout.addWidget(self.chk_case_sensitive)
+
+        self.search_count_label = QLabel("0 / 0")
+        self.search_count_label.setMinimumWidth(55)
+        self.search_count_label.setAlignment(Qt.AlignCenter)
+        self.search_count_label.setStyleSheet("color: #586380; background: transparent; border: none; font-size: 13px;")
+        search_layout.addWidget(self.search_count_label)
+
+        self.btn_prev_match = QPushButton("Prev")
+        self.btn_prev_match.clicked.connect(self.goto_prev_search_match)
+        search_layout.addWidget(self.btn_prev_match)
+
+        self.btn_next_match = QPushButton("Next")
+        self.btn_next_match.clicked.connect(self.goto_next_search_match)
+        search_layout.addWidget(self.btn_next_match)
+
+        self.btn_close_search = QPushButton("Close")
+        self.btn_close_search.clicked.connect(self.hide_search_bar)
+        search_layout.addWidget(self.btn_close_search)
+
+        parent_layout.addWidget(self.search_bar)
+
+        self.search_bar_height = 58
+        self.search_animation = QPropertyAnimation(self.search_bar, b"maximumHeight")
+        self.search_animation.setDuration(180)
+        self.search_animation.setEasingCurve(QEasingCurve.OutCubic)
+        self.search_animation.finished.connect(self.on_search_animation_finished)
+
+    def show_search_bar(self):
+        self.is_search_visible = True
+        self.search_bar.show()
+        self.search_animation.stop()
+        self.search_animation.setStartValue(self.search_bar.maximumHeight())
+        self.search_animation.setEndValue(self.search_bar_height)
+        self.search_animation.start()
+        self.search_input.setFocus()
+        self.search_input.selectAll()
+        self.update_search_matches(self.search_input.text())
+
+    def hide_search_bar(self):
+        self.clear_search_selection()
+        self.is_search_visible = False
+        self.search_animation.stop()
+        self.search_animation.setStartValue(self.search_bar.height())
+        self.search_animation.setEndValue(0)
+        self.search_animation.start()
+
+    def reset_search_bar(self):
+        self.clear_search_selection()
+        self.search_animation.stop()
+        self.is_search_visible = False
+        self.search_matches = []
+        self.current_search_index = -1
+        self.search_input.clear()
+        self.chk_whole_word.setChecked(False)
+        self.chk_case_sensitive.setChecked(False)
+        self.update_search_count_label()
+        self.search_bar.setMaximumHeight(0)
+        self.search_bar.hide()
+
+    def on_search_animation_finished(self):
+        if not self.is_search_visible and self.search_bar.maximumHeight() == 0:
+            self.search_bar.hide()
+
+    def update_search_matches(self, query):
+        self.clear_search_selection()
+        self.search_matches = []
+        self.current_search_index = -1
+
+        normalized_query = query.strip()
+        if normalized_query:
+            whole_word = self.chk_whole_word.isChecked()
+            case_sensitive = self.chk_case_sensitive.isChecked()
+            search_query = normalized_query if case_sensitive else normalized_query.lower()
+            query_len = len(normalized_query)
+
+            for row in self.rows:
+                for field in (row.word_input, row.def_input):
+                    text = field.toPlainText()
+                    start = 0
+                    search_text = text if case_sensitive else text.lower()
+                    while True:
+                        found_at = search_text.find(search_query, start)
+                        if found_at == -1:
+                            break
+                        if not whole_word or self.is_whole_word_match(text, found_at, query_len):
+                            self.search_matches.append((row, field, found_at, query_len))
+                        start = found_at + query_len
+
+        self.update_search_count_label()
+
+    def is_whole_word_match(self, text, start, length):
+        before = text[start - 1] if start > 0 else ""
+        after_index = start + length
+        after = text[after_index] if after_index < len(text) else ""
+        return not self.is_word_char(before) and not self.is_word_char(after)
+
+    def is_word_char(self, char):
+        return bool(char) and (char.isalnum() or char == "_")
+
+    def update_search_count_label(self):
+        total = len(self.search_matches)
+        current = self.current_search_index + 1 if total and self.current_search_index >= 0 else 0
+        self.search_count_label.setText(f"{current} / {total}")
+        has_matches = total > 0
+        self.btn_prev_match.setEnabled(has_matches)
+        self.btn_next_match.setEnabled(has_matches)
+
+    def goto_next_search_match(self):
+        if not self.search_matches:
+            return
+        if self.current_search_index == len(self.search_matches) - 1:
+            QMessageBox.information(self, "Search", "Reached the last match. Continuing from the first result.")
+        self.current_search_index = (self.current_search_index + 1) % len(self.search_matches)
+        self.focus_current_search_match()
+
+    def goto_prev_search_match(self):
+        if not self.search_matches:
+            return
+        self.current_search_index = (self.current_search_index - 1) % len(self.search_matches)
+        self.focus_current_search_match()
+
+    def focus_current_search_match(self):
+        if not self.search_matches or self.current_search_index < 0:
+            self.update_search_count_label()
+            return
+
+        row, field, start, length = self.search_matches[self.current_search_index]
+        cursor = field.textCursor()
+        cursor.setPosition(start)
+        cursor.setPosition(start + length, QTextCursor.KeepAnchor)
+        field.setTextCursor(cursor)
+        self.current_search_field = field
+        field.setFocus()
+        QTimer.singleShot(10, lambda: self.scroll_area.ensureWidgetVisible(row))
+        self.update_search_count_label()
+
+    def clear_search_selection(self):
+        field = self.current_search_field
+        if field is not None:
+            cursor = field.textCursor()
+            cursor.clearSelection()
+            field.setTextCursor(cursor)
+            self.current_search_field = None
 
     def add_and_scroll(self):
         new_row = self.add_row()
@@ -319,12 +533,33 @@ class CreateSetView(QWidget):
         row.delete_requested.connect(self.remove_row)
         row.tab_reached_end.connect(self.handle_row_tab_out)
         row.autofill_status_changed.connect(self.handle_autofill_status)
+        row.word_input.installEventFilter(self)
+        row.def_input.installEventFilter(self)
+        row.word_input.textChanged.connect(self.refresh_search_if_visible)
+        row.def_input.textChanged.connect(self.refresh_search_if_visible)
         # Apply current autofill lock state to the new row
         row.btn_autofill.setEnabled(not self.is_autofilling)
         
         self.rows_layout.addWidget(row)
         self.rows.append(row)
+        self.refresh_search_if_visible()
         return row
+
+    def eventFilter(self, obj, event):
+        if (
+            self.is_search_visible
+            and event.type() == QEvent.KeyPress
+            and event.key() in (Qt.Key_Return, Qt.Key_Enter)
+            and isinstance(obj, SmartTextEdit)
+        ):
+            self.goto_next_search_match()
+            event.accept()
+            return True
+        return super().eventFilter(obj, event)
+
+    def refresh_search_if_visible(self):
+        if self.is_search_visible:
+            self.update_search_matches(self.search_input.text())
 
     def handle_autofill_status(self, is_busy):
         self.is_autofilling = is_busy
@@ -355,8 +590,10 @@ class CreateSetView(QWidget):
         row_widget.deleteLater()
         for i, r in enumerate(self.rows): r.num_label.setText(str(i + 1))
         self.scroll_content.adjustSize()
+        self.refresh_search_if_visible()
 
     def clear_all(self):
+        self.reset_search_bar()
         self.title_input.clear()
         self.desc_input.clear()
         self.edit_set_id = None
@@ -370,6 +607,7 @@ class CreateSetView(QWidget):
         QTimer.singleShot(10, lambda: self.scroll_area.verticalScrollBar().setValue(0))
 
     def load_set_data(self, set_data):
+        self.reset_search_bar()
         self.title_input.setText(set_data.get('title', ''))
         self.desc_input.setText(set_data.get('description', ''))
         self.edit_set_id = set_data.get('id')
