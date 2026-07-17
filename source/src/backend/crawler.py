@@ -57,7 +57,7 @@ class WordDataProvider:
 
     def load_prompt(self):
         """Loads the prompt template from an external file."""
-        prompt_path = "gemini_prompt.txt"
+        prompt_path = ConfigManager.get_resolved_prompt_filepath()
         default_prompt = """
         Provide detailed dictionary information for the English word '{word}'.
         Return ONLY a JSON object with the key "formatted_definition".

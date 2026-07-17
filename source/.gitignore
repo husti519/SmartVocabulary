@@ -1,6 +1,9 @@
 # 로그
 SmartVoca_log/
 
+# tts 생성 폴더
+tts/
+
 # 파이썬 캐시
 __pycache__/
 *.pyc
@@ -10,3 +13,10 @@ __pycache__/
 
 # VS Code 환경
 .vscode
+
+# AI 에이전트 관련
+.agents
+SESSION_NOTES.md
+
+# 환경설정 파일
+.smart_voca_config.json

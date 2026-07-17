@@ -1,5 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import shutil
+
 
 a = Analysis(
     ['main.py'],
@@ -36,4 +38,11 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['assets\\icons8-Vocabulary-100.png'],
+)
+
+# Keep the editable prompt outside the one-file executable. This places it next
+# to SmartVocabulary.exe without adding it to the PyInstaller data archive.
+shutil.copy2(
+    os.path.join(SPECPATH, 'gemini_prompt.txt'),
+    os.path.join(DISTPATH, 'gemini_prompt.txt'),
 )

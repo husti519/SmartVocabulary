@@ -44,7 +44,12 @@ def main():
         sys.exit(1)
 
     with open(style_path, "r", encoding="utf-8") as f:
-        app.setStyleSheet(f.read())
+        stylesheet = f.read()
+
+    # Resolve relative asset URLs inside QSS for PyInstaller one-file builds.
+    assets_path = get_resource_path("assets").replace("\\", "/")
+    stylesheet = stylesheet.replace('url("assets/', f'url("{assets_path}/')
+    app.setStyleSheet(stylesheet)
 
     window = MainWindow()
     window.show()

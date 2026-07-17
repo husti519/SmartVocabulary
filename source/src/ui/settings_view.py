@@ -4,10 +4,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFileD
 from PySide6.QtCore import Qt, Signal, QTimer
 import os
 import re
-from pathlib import Path
 from google import genai
 from ..utils.config_manager import ConfigManager
-from ..utils.path_utils import get_external_path
 from ..backend.crawler import GeminiWorker
 from ..utils.logger import log_exception
 from .components.focus_button import FocusButton
@@ -524,9 +522,7 @@ class SettingsView(QWidget):
         prompt_path = self.prompt_filename_edit.text().strip()
         
         if prompt_path:
-            path = Path(prompt_path)
-            if path.name == prompt_path and path.suffix != "":
-                prompt_path = get_external_path(prompt_path)
+            prompt_path = ConfigManager.get_resolved_prompt_filepath(prompt_path)
             
             try:
                 with open(prompt_path, "w", encoding="utf-8") as f:
@@ -544,13 +540,12 @@ class SettingsView(QWidget):
             QMessageBox.information(self, "성공", "모든 설정이 저장되었습니다.")
 
     def load_prompt_file(self, filepath: str = ""):
-        prompt_path = filepath if filepath else ConfigManager.get_prompt_filepath()
+        configured_path = filepath or ConfigManager.get_prompt_filepath()
+        prompt_path = ConfigManager.get_resolved_prompt_filepath(configured_path)
         
-        path = Path(prompt_path)
-        if path.name == prompt_path and path.suffix != "":
-            prompt_path = get_external_path(prompt_path)
-        
-        self.prompt_filename_edit.setText(prompt_path)
+        self.prompt_filename_edit.setText(
+            filepath or ConfigManager.get_prompt_filepath() or ConfigManager.DEFAULT_PROMPT_FILENAME
+        )
         
         if os.path.exists(prompt_path):
             try:

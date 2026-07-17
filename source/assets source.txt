@@ -11,3 +11,7 @@ https://icons8.com/icon/D1TWNFLDGwX9/dictionary
 https://icons8.com/icon/aVM0CHwkTZGB/triangle
 #icons8-checked-checkbox-50.png
 https://icons8.com/icon/25534/checked-checkbox
+
+
+# 파일 해시값 생성
+Get-FileHash "C:\경로\파일이름.exe" -Algorithm SHA256

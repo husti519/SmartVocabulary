@@ -1,10 +1,12 @@
 import json
 import os
+from pathlib import Path
 from PySide6.QtCore import QObject, Qt
 from .path_utils import get_external_path
 
 class ConfigManager(QObject):
     CONFIG_FILE = get_external_path(".smart_voca_config.json")
+    DEFAULT_PROMPT_FILENAME = "gemini_prompt.txt"
     
     SPECIAL_KEYS = {
         Qt.Key_Up: "Up",
@@ -110,8 +112,22 @@ class ConfigManager(QObject):
     
     @staticmethod
     def save_prompt_filepath(filepath: str, sync=True):
+        """Save prompt paths relative to the executable whenever possible."""
         ConfigManager._ensure_loaded()
-        ConfigManager._config_cache['prompt_filepath'] = filepath
+
+        external_dir = Path(get_external_path("")).resolve()
+        prompt_path = Path(filepath or ConfigManager.DEFAULT_PROMPT_FILENAME).expanduser()
+        if not prompt_path.is_absolute():
+            prompt_path = external_dir / prompt_path
+        prompt_path = prompt_path.resolve()
+
+        try:
+            stored_path = str(prompt_path.relative_to(external_dir))
+        except ValueError:
+            # Keep absolute paths selected outside the application directory.
+            stored_path = str(prompt_path)
+
+        ConfigManager._config_cache['prompt_filepath'] = stored_path
         if sync:
             ConfigManager.sync()
     
@@ -119,6 +135,30 @@ class ConfigManager(QObject):
     def get_prompt_filepath() -> str:
         ConfigManager._ensure_loaded()
         return ConfigManager._config_cache.get('prompt_filepath', '')
+
+    @staticmethod
+    def get_resolved_prompt_filepath(filepath: str = "") -> str:
+        """Resolve the editable prompt path and repair stale portable paths."""
+        saved_path = filepath.strip() if filepath else ConfigManager.get_prompt_filepath().strip()
+        saved_path = saved_path or ConfigManager.DEFAULT_PROMPT_FILENAME
+
+        external_dir = Path(get_external_path("")).resolve()
+        prompt_path = Path(saved_path).expanduser()
+        if not prompt_path.is_absolute():
+            return str((external_dir / prompt_path).resolve())
+
+        prompt_path = prompt_path.resolve()
+        if prompt_path.exists():
+            return str(prompt_path)
+
+        # A portable application may have moved while the config still contains
+        # the old absolute path. Look for the same file next to the current EXE.
+        moved_path = (external_dir / prompt_path.name).resolve()
+        if moved_path.exists():
+            ConfigManager.save_prompt_filepath(str(moved_path))
+            return str(moved_path)
+
+        return str(prompt_path)
 
     @staticmethod
     def save_supabase_config(url, key, sync=True):

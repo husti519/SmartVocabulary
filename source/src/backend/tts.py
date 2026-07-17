@@ -1,14 +1,15 @@
 import os
 from gtts import gTTS
-import tempfile
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices
 from PySide6.QtCore import QUrl
 import hashlib
 from ..utils.logger import log_info
+from ..utils.path_utils import get_external_path
 
 class TTSManager:
     def __init__(self):
-        self.temp_dir = tempfile.gettempdir()
+        self.tts_dir = get_external_path("tts")
+        os.makedirs(self.tts_dir, exist_ok=True)
         # Initialize internal player
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
@@ -24,7 +25,7 @@ class TTSManager:
         try:
             # Generate or reuse temp file
             safe_text = hashlib.md5(text.encode()).hexdigest()
-            filename = os.path.join(self.temp_dir, f"tts_{safe_text}.mp3")
+            filename = os.path.join(self.tts_dir, f"tts_{safe_text}.mp3")
             
             if not os.path.exists(filename):
                 tts = gTTS(text=text, lang=lang)
