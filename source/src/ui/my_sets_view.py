@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QScrollArea, QFrame, QGridLayout, QStackedWidget, 
                              QMessageBox, QLineEdit, QComboBox, QRadioButton, QDialog)
-from PySide6.QtCore import Qt, Signal, QTimer, QThread, QPropertyAnimation, QEasingCurve, QSize
+from PySide6.QtCore import Qt, Signal, QTimer, QThread, QPropertyAnimation, QEasingCurve, QSize, QPoint
 from ..backend.supabase_client import SupabaseManager
 from ..backend.tts import TTSManager
 from .components.set_card import SetCardWidget
@@ -205,6 +205,9 @@ class TermRowWidget(QFrame):
     tts_requested = Signal(str) # word
     long_pressed = Signal(dict) # card_data
     selection_changed = Signal()
+    selection_drag_started = Signal(object) # TermRowWidget
+    selection_drag_moved = Signal(QPoint) # Global mouse position
+    selection_drag_finished = Signal()
 
     def __init__(self, card_data, parent=None):
         super().__init__(parent)
@@ -217,6 +220,7 @@ class TermRowWidget(QFrame):
         self.is_selection_mode = False
         self.is_selected = False
         self._long_press_triggered = False
+        self._selection_dragging = False
         
         # Long press timer
         self.press_timer = QTimer()
@@ -350,20 +354,40 @@ class TermRowWidget(QFrame):
         if not self.is_selection_mode:
             self._long_press_triggered = True
             self.long_pressed.emit(self.card_data)
+            # enter_selection_mode() is invoked synchronously by long_pressed.
+            # Continue the held click as the start of a selection drag.
+            if self.is_selection_mode:
+                self._selection_dragging = True
+                self.selection_drag_started.emit(self)
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton and not self.is_selection_mode:
+        if event.button() == Qt.LeftButton:
             self._long_press_triggered = False
+            if self.is_selection_mode:
+                self._selection_dragging = True
+                self.set_selected(not self.is_selected)
+                self.selection_drag_started.emit(self)
+                event.accept()
+                return
             self.press_timer.start(1200) # 1.2 seconds
         super().mousePressEvent(event)
 
+    def mouseMoveEvent(self, event):
+        if self._selection_dragging and event.buttons() & Qt.LeftButton:
+            self.selection_drag_moved.emit(event.globalPosition().toPoint())
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
     def mouseReleaseEvent(self, event):
         self.press_timer.stop()
-        if event.button() == Qt.LeftButton and self.is_selection_mode:
-            # Only toggle if this wasn't the release of the click that triggered the mode
-            if not self._long_press_triggered:
-                if not self.checkbox.underMouse(): # Avoid double toggle if checkbox itself was clicked
-                    self.set_selected(not self.is_selected)
+        if event.button() == Qt.LeftButton and self._selection_dragging:
+            self.selection_drag_moved.emit(event.globalPosition().toPoint())
+            self._selection_dragging = False
+            self.selection_drag_finished.emit()
+            event.accept()
+            self._long_press_triggered = False
+            return
         
         self._long_press_triggered = False
         super().mouseReleaseEvent(event)
@@ -373,6 +397,8 @@ class TermRowWidget(QFrame):
 
     def set_selection_mode(self, enabled):
         self.is_selection_mode = enabled
+        if not enabled:
+            self._selection_dragging = False
         self.checkbox.setVisible(enabled)
         if not enabled:
             self.set_selected(False)
@@ -407,6 +433,13 @@ class SetDetailView(QWidget):
         self.all_rows = [] # Store references to TermRowWidgets for filtering
         
         self.is_selection_mode = False
+        self._selection_drag_last_row = None
+        self._selection_drag_direction = 0
+        self._selection_drag_global_pos = None
+        self._selection_auto_scroll_margin = 48
+        self._selection_auto_scroll_timer = QTimer(self)
+        self._selection_auto_scroll_timer.setInterval(30)
+        self._selection_auto_scroll_timer.timeout.connect(self.auto_scroll_card_selection)
         
         self.setup_ui()
 
@@ -705,6 +738,10 @@ class SetDetailView(QWidget):
     def exit_selection_mode(self):
         if not self.is_selection_mode: return
         self.is_selection_mode = False
+        self._selection_drag_last_row = None
+        self._selection_drag_direction = 0
+        self._selection_drag_global_pos = None
+        self._selection_auto_scroll_timer.stop()
         
         self.toolbar_animation.stop()
         self.toolbar_animation.setStartValue(self.multi_select_bar.height())
@@ -733,6 +770,92 @@ class SetDetailView(QWidget):
             self.radio_select_all.setChecked(True)
         else:
             self.radio_select_all.setChecked(False)
+
+    def begin_card_selection_drag(self, source_row):
+        if self.is_selection_mode:
+            self._selection_drag_last_row = source_row
+            self._selection_drag_direction = 0
+            self._selection_drag_global_pos = None
+            self._selection_auto_scroll_timer.stop()
+
+    def continue_card_selection_drag(self, global_pos):
+        if not self.is_selection_mode or self._selection_drag_last_row is None:
+            return
+
+        self._selection_drag_global_pos = global_pos
+        if not self._selection_auto_scroll_timer.isActive():
+            self._selection_auto_scroll_timer.start()
+
+        visible_rows = [row for row in self.all_rows if row.isVisible()]
+        hovered_row = next(
+            (
+                row for row in visible_rows
+                if row.rect().contains(row.mapFromGlobal(global_pos))
+            ),
+            None,
+        )
+        if hovered_row is None or hovered_row is self._selection_drag_last_row:
+            return
+
+        try:
+            previous_index = visible_rows.index(self._selection_drag_last_row)
+            current_index = visible_rows.index(hovered_row)
+        except ValueError:
+            self._selection_drag_last_row = hovered_row
+            return
+
+        step = 1 if current_index > previous_index else -1
+        direction_changed = (
+            self._selection_drag_direction != 0
+            and step != self._selection_drag_direction
+        )
+        start_index = previous_index if direction_changed else previous_index + step
+
+        for index in range(start_index, current_index + step, step):
+            row = visible_rows[index]
+            row.set_selected(not row.is_selected)
+
+        self._selection_drag_last_row = hovered_row
+        self._selection_drag_direction = step
+
+    def finish_card_selection_drag(self):
+        self._selection_drag_last_row = None
+        self._selection_drag_direction = 0
+        self._selection_drag_global_pos = None
+        self._selection_auto_scroll_timer.stop()
+
+    def auto_scroll_card_selection(self):
+        if (
+            not self.is_selection_mode
+            or self._selection_drag_last_row is None
+            or self._selection_drag_global_pos is None
+        ):
+            self._selection_auto_scroll_timer.stop()
+            return
+
+        viewport = self.scroll_area.viewport()
+        local_pos = viewport.mapFromGlobal(self._selection_drag_global_pos)
+        margin = self._selection_auto_scroll_margin
+        viewport_height = viewport.height()
+        scroll_delta = 0
+
+        if local_pos.y() < margin:
+            intensity = min(1.0, (margin - local_pos.y()) / margin)
+            scroll_delta = -max(4, round(28 * intensity))
+        elif local_pos.y() > viewport_height - margin:
+            intensity = min(1.0, (local_pos.y() - (viewport_height - margin)) / margin)
+            scroll_delta = max(4, round(28 * intensity))
+
+        if scroll_delta == 0:
+            return
+
+        scroll_bar = self.scroll_area.verticalScrollBar()
+        previous_value = scroll_bar.value()
+        scroll_bar.setValue(previous_value + scroll_delta)
+
+        if scroll_bar.value() != previous_value:
+            # Scrolling changes which row lies under the held mouse position.
+            self.continue_card_selection_drag(self._selection_drag_global_pos)
 
     def handle_bulk_move(self):
         selected_ids = [r.card_id for r in self.all_rows if r.is_selected]
@@ -815,6 +938,9 @@ class SetDetailView(QWidget):
             row.tts_requested.connect(self.handle_tts)
             row.long_pressed.connect(self.enter_selection_mode)
             row.selection_changed.connect(self.update_selection_count)
+            row.selection_drag_started.connect(self.begin_card_selection_drag)
+            row.selection_drag_moved.connect(self.continue_card_selection_drag)
+            row.selection_drag_finished.connect(self.finish_card_selection_drag)
             self.list_layout.insertWidget(self.list_layout.count() - 1, row)
             self.all_rows.append(row)
             

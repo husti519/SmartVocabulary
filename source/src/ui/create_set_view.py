@@ -42,6 +42,7 @@ class SaveSetWorker(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
+# CardInputRow에서 사용하는 텍스트 입력창. Tab 키 입력시 다음 컨트롤로 포커싱을 옮기기 위함.
 class SmartTextEdit(QTextEdit):
     """Custom QTextEdit that emits signals for forward navigation and auto-expands."""
     tab_pressed = Signal()
@@ -72,6 +73,7 @@ class SmartTextEdit(QTextEdit):
             self.setFixedHeight(new_height)
             self.size_changed.emit()
 
+# 카드셋 편집 화면의 단어 카드 위젯
 class CardInputRow(QFrame):
     delete_requested = Signal(object)
     tab_reached_end = Signal(object)
@@ -232,6 +234,7 @@ class CreateSetView(QWidget):
         self.search_matches = []
         self.current_search_index = -1
         self.is_search_visible = False
+        self.is_search_navigation_active = False
         self.current_search_field = None
         self.setup_ui()
 
@@ -321,6 +324,11 @@ class CreateSetView(QWidget):
         self.search_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
         self.search_shortcut.activated.connect(self.show_search_bar)
 
+        self.close_search_shortcut = QShortcut(QKeySequence(Qt.Key_Escape), self)
+        self.close_search_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self.close_search_shortcut.activated.connect(self.hide_search_bar)
+        self.close_search_shortcut.setEnabled(False)
+
     def setup_search_bar(self, parent_layout):
         self.search_bar = QFrame()
         self.search_bar.setObjectName("CreateSetSearchBar")
@@ -398,6 +406,19 @@ class CreateSetView(QWidget):
         self.btn_close_search.clicked.connect(self.hide_search_bar)
         search_layout.addWidget(self.btn_close_search)
 
+        # Clicking anywhere in the search controls returns Enter to search navigation.
+        for widget in (
+            self.search_bar,
+            self.search_input,
+            self.chk_whole_word,
+            self.chk_case_sensitive,
+            self.search_count_label,
+            self.btn_prev_match,
+            self.btn_next_match,
+            self.btn_close_search,
+        ):
+            widget.installEventFilter(self)
+
         parent_layout.addWidget(self.search_bar)
 
         self.search_bar_height = 58
@@ -408,6 +429,8 @@ class CreateSetView(QWidget):
 
     def show_search_bar(self):
         self.is_search_visible = True
+        self.is_search_navigation_active = True
+        self.close_search_shortcut.setEnabled(True)
         self.search_bar.show()
         self.search_animation.stop()
         self.search_animation.setStartValue(self.search_bar.maximumHeight())
@@ -420,6 +443,8 @@ class CreateSetView(QWidget):
     def hide_search_bar(self):
         self.clear_search_selection()
         self.is_search_visible = False
+        self.is_search_navigation_active = False
+        self.close_search_shortcut.setEnabled(False)
         self.search_animation.stop()
         self.search_animation.setStartValue(self.search_bar.height())
         self.search_animation.setEndValue(0)
@@ -429,6 +454,8 @@ class CreateSetView(QWidget):
         self.clear_search_selection()
         self.search_animation.stop()
         self.is_search_visible = False
+        self.is_search_navigation_active = False
+        self.close_search_shortcut.setEnabled(False)
         self.search_matches = []
         self.current_search_index = -1
         self.search_input.clear()
@@ -535,6 +562,8 @@ class CreateSetView(QWidget):
         row.autofill_status_changed.connect(self.handle_autofill_status)
         row.word_input.installEventFilter(self)
         row.def_input.installEventFilter(self)
+        row.word_input.viewport().installEventFilter(self)
+        row.def_input.viewport().installEventFilter(self)
         row.word_input.textChanged.connect(self.refresh_search_if_visible)
         row.def_input.textChanged.connect(self.refresh_search_if_visible)
         # Apply current autofill lock state to the new row
@@ -546,16 +575,44 @@ class CreateSetView(QWidget):
         return row
 
     def eventFilter(self, obj, event):
+        text_edit = self.get_event_text_edit(obj)
+
+        if self.is_search_visible and event.type() == QEvent.MouseButtonPress:
+            if obj is self.search_bar or self.search_bar.isAncestorOf(obj):
+                self.is_search_navigation_active = True
+            elif text_edit is not None:
+                self.is_search_navigation_active = False
+
         if (
             self.is_search_visible
+            and self.is_search_navigation_active
             and event.type() == QEvent.KeyPress
             and event.key() in (Qt.Key_Return, Qt.Key_Enter)
-            and isinstance(obj, SmartTextEdit)
+            and text_edit is not None
         ):
             self.goto_next_search_match()
             event.accept()
             return True
+
+        if (
+            self.is_search_visible
+            and self.is_search_navigation_active
+            and event.type() == QEvent.KeyPress
+            and text_edit is not None
+        ):
+            self.is_search_navigation_active = False
+
         return super().eventFilter(obj, event)
+
+    def get_event_text_edit(self, obj):
+        if isinstance(obj, SmartTextEdit):
+            return obj
+
+        parent = obj.parentWidget() if hasattr(obj, "parentWidget") else None
+        if isinstance(parent, SmartTextEdit) and obj is parent.viewport():
+            return parent
+
+        return None
 
     def refresh_search_if_visible(self):
         if self.is_search_visible:
